@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 #
 # compreface-core — embedding-calculator (Python/Flask/uWSGI), non-root, model ML ter-bake.
-# Build context: root repo  (docker build -f services/compreface-core/Dockerfile .)
-# Ignore file  : services/compreface-core/Dockerfile.dockerignore (BuildKit)
-# Build args   : lihat services/compreface-core/build-args.env (dipakai scripts/build.sh)
+# Build context: root repo ini  (docker build -t mega/compreface-core:<versi> .  — atau scripts/build.sh)
+# Ignore file  : .dockerignore
+# Build args   : lihat docker/build-args.env (dipakai scripts/build.sh)
 #
 # Stage:
 #   base-cpu / base-gpu : base runtime minimal (dipilih lewat build arg COMPUTE=cpu|gpu)
@@ -185,7 +185,7 @@ RUN apt-get update \
 COPY --from=builder /usr/local /usr/local
 RUN ldconfig
 COPY --from=builder /app/ml /app/ml
-COPY services/compreface-core/uwsgi.ini /app/ml/uwsgi.ini
+COPY docker/uwsgi.ini /app/ml/uwsgi.ini
 COPY LICENSE NOTICE /usr/share/licenses/compreface/
 
 ENV HOME=/app/ml LC_ALL=C.UTF-8 LANG=C.UTF-8 PYTHONUNBUFFERED=0 JOBLIB_MULTIPROCESSING=0 \

@@ -1,0 +1,12 @@
+# core: replicas=1 (GPU) → minAvailable: 1 akan memblokir drain node selamanya.
+# maxUnavailable: 1 membatasi gangguan tanpa memblokir maintenance. Ganti ke minAvailable: 1
+# bila replicas core ≥ 2.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: compreface-core
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: compreface-core
