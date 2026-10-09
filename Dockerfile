@@ -270,6 +270,14 @@ ENV UWSGI_PROCESSES=2
 ENV UWSGI_THREADS=1 
 ENV LOGGING_LEVEL_NAME=info
 
+# Cleanup Proxy
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=localhost,127.0.0.1,.bankmega.com
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV NO_PROXY=localhost,127.0.0.1,.bankmega.com
+
 WORKDIR /app/ml
 
 # www-data (uid 33) tersedia di base Debian & Ubuntu. File aplikasi & model milik root (read-only).
