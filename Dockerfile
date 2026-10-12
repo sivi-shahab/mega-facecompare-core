@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-#
 # compreface-core — embedding-calculator (Python/Flask/uWSGI), non-root, model ML ter-bake.
 # Build context: root repo ini  (docker build -t mega/compreface-core:<versi> .  — atau scripts/build.sh)
 # Ignore file  : .dockerignore
