@@ -53,6 +53,10 @@ class ImageReadLibraryError(BadRequest):
     description = "Image has incorrect format or is broken"
 
 
+class ImageTooLargeError(BadRequest):
+    description = "Image dimensions are too large"
+
+
 class FaceHasNoEmbeddingCalculatedError(InternalServerError):
     description = "Saved face has no embedding calculated and saved in the database"
 

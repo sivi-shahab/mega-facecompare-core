@@ -35,12 +35,23 @@ class FaceDetection(object):
 
 
 def face_detection_skip_check(face_plugins):
-    if request.values.get("detect_faces") == "false":
-        FaceDetection.SKIPPING_FACE_DETECTION = True
-        restricted_plugins = [plugin for plugin in face_plugins if plugin.name not in SKIPPED_PLUGINS]
-        return restricted_plugins
-    else:
-        return face_plugins
+    # Security fix (audit MFC-04): the flag is request-scoped. It is assigned on EVERY request (never left over
+    # from a previous one) and callers reset it in a finally block, so a failed request cannot make the next
+    # request of another tenant skip face detection.
+    skip = request.values.get("detect_faces") == "false"
+    FaceDetection.SKIPPING_FACE_DETECTION = skip
+    if skip:
+        return [plugin for plugin in face_plugins if plugin.name not in SKIPPED_PLUGINS]
+    return face_plugins
+
+
+def _run_detector(detector, img, det_prob_threshold, face_plugins):
+    try:
+        face_plugins = face_detection_skip_check(face_plugins)
+        faces = detector(img=img, det_prob_threshold=det_prob_threshold, face_plugins=face_plugins)
+        return faces, face_plugins
+    finally:
+        FaceDetection.SKIPPING_FACE_DETECTION = False
 
 
 def endpoints(app):
@@ -48,12 +59,15 @@ def endpoints(app):
     def init_model() -> None:
         detector = managers.plugin_manager.detector
         face_plugins = managers.plugin_manager.face_plugins
-        face_plugins = face_detection_skip_check(face_plugins)
-        detector(
-            img=read_img(str(IMG_DIR / 'einstein.jpeg')),
-            det_prob_threshold=_get_det_prob_threshold(),
-            face_plugins=face_plugins
-        )
+        try:
+            FaceDetection.SKIPPING_FACE_DETECTION = False  # warm-up always runs real detection
+            detector(
+                img=read_img(str(IMG_DIR / 'einstein.jpeg')),
+                det_prob_threshold=None,
+                face_plugins=face_plugins
+            )
+        finally:
+            FaceDetection.SKIPPING_FACE_DETECTION = False
         print("Starting to load ML models")
         return None
 
@@ -81,17 +95,12 @@ def endpoints(app):
         face_plugins = managers.plugin_manager.filter_face_plugins(
             _get_face_plugin_names()
         )
-        face_plugins = face_detection_skip_check(face_plugins)
-        rawfile = base64.b64decode(request.get_json()["file"])
-
-        faces = detector(
-            img=read_img(rawfile),
-            det_prob_threshold=_get_det_prob_threshold(),
-            face_plugins=face_plugins
-        )
+        # validate input before any state change (audit MFC-04)
+        det_prob_threshold = _get_det_prob_threshold()
+        img = read_img(base64.b64decode(request.get_json()["file"]))
+        faces, face_plugins = _run_detector(detector, img, det_prob_threshold, face_plugins)
         plugins_versions = {p.slug: str(p) for p in [detector] + face_plugins}
         faces = _limit(faces, request.values.get(ARG.LIMIT))
-        FaceDetection.SKIPPING_FACE_DETECTION = False
         return jsonify(plugins_versions=plugins_versions, result=faces)
 
     @app.route('/find_faces', methods=['POST'])
@@ -101,23 +110,23 @@ def endpoints(app):
         face_plugins = managers.plugin_manager.filter_face_plugins(
             _get_face_plugin_names()
         )
-        face_plugins = face_detection_skip_check(face_plugins)
-        faces = detector(
-            img=read_img(request.files['file']),
-            det_prob_threshold=_get_det_prob_threshold(),
-            face_plugins=face_plugins
-        )
+        # validate input before any state change (audit MFC-04)
+        det_prob_threshold = _get_det_prob_threshold()
+        img = read_img(request.files['file'])
+        faces, face_plugins = _run_detector(detector, img, det_prob_threshold, face_plugins)
         plugins_versions = {p.slug: str(p) for p in [detector] + face_plugins}
         faces = _limit(faces, request.values.get(ARG.LIMIT))
-        FaceDetection.SKIPPING_FACE_DETECTION = False
         return jsonify(plugins_versions=plugins_versions, result=faces)
 
     @app.route('/scan_faces', methods=['POST'])
     @needs_attached_file
     def scan_faces_post():
+        det_prob_threshold = _get_det_prob_threshold()
+        img = read_img(request.files['file'])
+        FaceDetection.SKIPPING_FACE_DETECTION = False  # scan never skips detection (audit MFC-04)
         faces = scanner.scan(
-            img=read_img(request.files['file']),
-            det_prob_threshold=_get_det_prob_threshold()
+            img=img,
+            det_prob_threshold=det_prob_threshold
         )
         faces = _limit(faces, request.values.get(ARG.LIMIT))
         return jsonify(calculator_version=scanner.ID, result=faces)
